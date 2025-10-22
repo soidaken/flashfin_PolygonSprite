@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cocos Creator 3.8 RichText BBCode 可视化编辑器 (v0.1)</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --muted: #334155;
+        --text: #e5e7eb;
+        --btn: #1f2937;
+        --acc: #22d3ee;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      header {
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        border-bottom: 1px solid var(--muted);
+        background: linear-gradient(180deg, #0f172a, #0b1220);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+      .wrap {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        min-height: calc(100vh - 54px);
+      }
+      .toolbar {
+        padding: 12px;
+        border-right: 1px solid var(--muted);
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .group {
+        border: 1px solid var(--muted);
+        border-radius: 12px;
+        padding: 10px;
+      }
+      .group h3 {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        font-weight: 700;
+        color: #cbd5e1;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+      .btnrow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button,
+      select,
+      input[type='text'],
+      input[type='number'],
+      input[type='color'] {
+        background: var(--btn);
+        color: var(--text);
+        border: 1px solid #263342;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        outline: 1px solid #3b82f6;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        padding: 12px;
+      }
+      .panel {
+        border: 1px solid var(--muted);
+        border-radius: 14px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 60vh;
+      }
+      .panel header {
+        background: #0b1220;
+        border-bottom: 1px solid var(--muted);
+        padding: 10px 12px;
+        position: unset;
+      }
+      .panel header h2 {
+        margin: 0;
+        font-size: 13px;
+        letter-spacing: 0.3px;
+        color: #cbd5e1;
+      }
+      .editor {
+        padding: 12px;
+        background: #0a0f1a;
+        flex: 1;
+        overflow: auto;
+      }
+      .preview {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      /* 左侧可视化编辑区样式 */
+      #viz {
+        outline: none;
+        min-height: 58vh;
+      }
+      #viz span[data-tag='b'] {
+        font-weight: 800;
+      }
+      #viz span[data-tag='i'] {
+        font-style: italic;
+      }
+      #viz span[data-tag='u'] {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      #viz span[data-tag='color'] {
+        /* color 通过 style 设置 */
+      }
+      #viz span[data-tag='size'] {
+        /* fontSize 通过 style 设置 */
+      }
+      #viz span[data-tag='outline'] {
+        text-shadow: 0 0 1px #fff; /* 仅作为编辑视觉提示 */
+      }
+      #viz span[data-tag='on'] {
+        outline: 1px dashed #6ee7b7;
+        outline-offset: 2px;
+      }
+      #viz span[data-tag='img'] {
+        display: inline-block;
+        vertical-align: baseline;
+        padding: 2px 4px;
+        background: #1b2433;
+        border: 1px solid #2b3b50;
+        border-radius: 6px;
+        color: #a5b4fc;
+      }
+      #viz br[data-br] {
+        content: '';
+      }
+
+      footer {
+        padding: 10px 12px;
+        border-top: 1px solid var(--muted);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        background: #0b1220;
+      }
+      .kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #111827;
+        border: 1px solid #263342;
+        border-bottom-width: 2px;
+        padding: 3px 6px;
+        border-radius: 6px;
+      }
+      .pill {
+        background: #0e7490;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .muted {
+        color: #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>RichText BBCode 可视化编辑器 (v0.1/cocoscreater3.8.7)</h1>
+      <span class="pill">左：所见即所得</span>
+      <span class="pill">右：生成 BBCode</span>
+    </header>
+
+    <div class="wrap">
+      <aside class="toolbar" aria-label="工具栏">
+        <div class="group">
+          <h3>基础样式</h3>
+          <div class="btnrow">
+            <button type="button" data-action="wrap" data-tag="b"><strong>B</strong></button>
+            <button type="button" data-action="wrap" data-tag="i"><em>I</em></button>
+            <button type="button" data-action="wrap" data-tag="u">
+              <span style="text-decoration: underline; text-underline-offset: 3px">U</span>
+            </button>
+            <button type="button" id="btn-br">插入换行 &lt;br/&gt;</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>颜色 / 字号</h3>
+          <div class="btnrow" style="gap: 6px; align-items: center">
+            <label class="muted">颜色</label>
+            <input type="color" id="inp-color" value="#22d3ee" />
+            <button type="button" id="btn-color" data-action="wrap" data-tag="color">
+              套用 color
+            </button>
+          </div>
+          <div class="btnrow" style="gap: 6px; align-items: center; margin-top: 8px">
+            <label class="muted">字号</label>
+            <input type="number" id="inp-size" value="28" min="1" step="1" style="width: 80px" />
+            <button type="button" id="btn-size" data-action="wrap" data-tag="size">
+              套用 size
+            </button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>描边 outline</h3>
+          <div class="btnrow" style="gap: 6px; align-items: center">
+            <label class="muted">颜色</label>
+            <input type="color" id="inp-outline-color" value="#ffffff" />
+            <label class="muted">宽度</label>
+            <input
+              type="number"
+              id="inp-outline-width"
+              value="1"
+              min="1"
+              step="1"
+              style="width: 70px" />
+          </div>
+          <div class="btnrow" style="margin-top: 8px">
+            <button type="button" id="btn-outline" data-action="wrap" data-tag="outline">
+              套用 outline
+            </button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>点击事件 on</h3>
+          <div class="btnrow" style="gap: 6px; align-items: center">
+            <label class="muted">click</label>
+            <input type="text" id="inp-on-click" placeholder="handler" style="width: 120px" />
+            <label class="muted">param</label>
+            <input type="text" id="inp-on-param" placeholder="可选" style="width: 100px" />
+          </div>
+          <div class="btnrow" style="margin-top: 8px">
+            <button type="button" id="btn-on" data-action="wrap" data-tag="on">包裹 on 标签</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>图片 img</h3>
+          <div class="btnrow" style="gap: 6px; align-items: center">
+            <label class="muted">src</label>
+            <input type="text" id="inp-img-src" placeholder="atlasName" style="width: 120px" />
+          </div>
+          <div class="btnrow" style="gap: 6px; align-items: center; margin-top: 8px">
+            <label class="muted">w</label>
+            <input type="number" id="inp-img-w" placeholder="宽" min="1" style="width: 80px" />
+            <label class="muted">h</label>
+            <input type="number" id="inp-img-h" placeholder="高" min="1" style="width: 80px" />
+          </div>
+          <div class="btnrow" style="gap: 6px; align-items: center; margin-top: 8px">
+            <label class="muted">align</label>
+            <select id="inp-img-align" style="width: 120px">
+              <option value="">默认 bottom</option>
+              <option value="bottom">bottom</option>
+              <option value="center">center</option>
+              <option value="top">top</option>
+            </select>
+          </div>
+          <div class="btnrow" style="gap: 6px; align-items: center; margin-top: 8px">
+            <label class="muted">offset</label>
+            <input type="text" id="inp-img-offset" placeholder="y 或 x,y" style="width: 120px" />
+          </div>
+          <div class="btnrow" style="margin-top: 8px">
+            <button type="button" id="btn-img">插入 &lt;img/&gt;</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>导入 / 导出</h3>
+          <div class="btnrow">
+            <button id="btn-undo" title="撤销 (Ctrl+Z)">撤销</button>
+            <button id="btn-clear" title="清空左侧">清空</button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <section class="split">
+          <div class="panel">
+            <header><h2>左 · 可视化编辑（选中后点按钮应用样式）</h2></header>
+            <div id="viz" class="editor" contenteditable="true" spellcheck="false"></div>
+            <footer>
+              <div class="muted">
+                提示：选中文字 → 点击上方按钮。例如 <span class="kbd">B</span>、<span class="kbd"
+                  >color</span
+                >、<span class="kbd">size</span> 等。
+              </div>
+            </footer>
+          </div>
+
+          <div class="panel">
+            <header><h2>右 · 生成的 BBCode（可直接复制到 Cocos RichText）</h2></header>
+            <pre id="bbcode" class="editor preview"></pre>
+            <footer>
+              <span class="muted"
+                >严格使用小写标签与 Cocos 3.8 语法，如 &lt;color=#ff0&gt;、&lt;size=30&gt;、&lt;on
+                click="..." param="..."&gt;、&lt;img ... /&gt;、&lt;br/&gt;</span
+              >
+              <button id="btn-copy" title="复制右侧 BBCode">复制 BBCode</button>
+            </footer>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      // 撤销历史记录
+      const undoStack = [];
+      const MAX_UNDO_STACK = 50;
+
+      // 保存的选区
+      let savedSelection = null;
+
+      function saveState() {
+        const viz = document.getElementById('viz');
+        const state = viz.innerHTML;
+        undoStack.push(state);
+        if (undoStack.length > MAX_UNDO_STACK) {
+          undoStack.shift(); // 保持最多50条历史
+        }
+      }
+
+      function undo() {
+        if (undoStack.length === 0) {
+          alert('没有可撤销的操作');
+          return;
+        }
+        const viz = document.getElementById('viz');
+        viz.innerHTML = undoStack.pop();
+        updateBBCode();
+      }
+
+      // 保存当前选区
+      function saveSelection() {
+        const sel = window.getSelection();
+        if (sel.rangeCount > 0) {
+          savedSelection = sel.getRangeAt(0).cloneRange();
+        }
+      }
+
+      // 恢复保存的选区
+      function restoreSelection() {
+        if (savedSelection) {
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(savedSelection);
+          return true;
+        }
+        return false;
+      }
+
+      // 递归移除指定范围内的特定标签
+      function unwrapTag(container, tagToRemove) {
+        // 递归处理，从内到外移除所有匹配的标签
+        let found = true;
+        while (found) {
+          const spans = container.querySelectorAll(`span[data-tag="${tagToRemove}"]`);
+          found = spans.length > 0;
+          spans.forEach(span => {
+            // 将 span 的内容提取出来，替换 span 本身
+            const parent = span.parentNode;
+            if (parent) {
+              while (span.firstChild) {
+                parent.insertBefore(span.firstChild, span);
+              }
+              parent.removeChild(span);
+            }
+          });
+        }
+        // 规范化容器，合并相邻的文本节点
+        container.normalize();
+      }
+
+      // 工具：在 contenteditable 中将所选内容用 <span data-tag=...> 包裹
+      function wrapSelection(tag, attrs = {}) {
+        saveState(); // 保存当前状态
+
+        // 先尝试恢复保存的选区
+        if (!restoreSelection()) {
+          return; // 没有保存的选区，直接返回
+        }
+
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        let range = sel.getRangeAt(0);
+        if (!range || range.collapsed) return; // 无选中
+
+        // 扩展选区以包含完整的相同类型标签
+        let startNode = range.startContainer;
+        let endNode = range.endContainer;
+
+        // 向上查找是否在目标标签内
+        let startSpan =
+          startNode.nodeType === Node.ELEMENT_NODE ? startNode : startNode.parentElement;
+        let endSpan = endNode.nodeType === Node.ELEMENT_NODE ? endNode : endNode.parentElement;
+
+        while (startSpan && startSpan.id !== 'viz') {
+          if (startSpan.getAttribute && startSpan.getAttribute('data-tag') === tag) {
+            range.setStartBefore(startSpan);
+            break;
+          }
+          startSpan = startSpan.parentElement;
+        }
+
+        while (endSpan && endSpan.id !== 'viz') {
+          if (endSpan.getAttribute && endSpan.getAttribute('data-tag') === tag) {
+            range.setEndAfter(endSpan);
+            break;
+          }
+          endSpan = endSpan.parentElement;
+        }
+
+        // 提取选中的内容到临时容器
+        const fragment = range.extractContents();
+        const tempDiv = document.createElement('div');
+        tempDiv.appendChild(fragment);
+
+        // 移除已存在的相同类型标签，避免嵌套（递归处理所有嵌套）
+        unwrapTag(tempDiv, tag);
+
+        const span = document.createElement('span');
+        span.setAttribute('data-tag', tag);
+
+        // 视觉样式（仅编辑态）+ 数据属性
+        switch (tag) {
+          case 'b':
+            span.style.fontWeight = '800';
+            break;
+          case 'i':
+            span.style.fontStyle = 'italic';
+            break;
+          case 'u':
+            span.style.textDecoration = 'underline';
+            span.style.textUnderlineOffset = '3px';
+            break;
+          case 'color':
+            if (attrs.color) {
+              span.style.color = attrs.color;
+              span.dataset.color = attrs.color;
+            }
+            break;
+          case 'size':
+            if (attrs.size) {
+              span.style.fontSize = attrs.size + 'px';
+              span.dataset.size = String(attrs.size);
+            }
+            break;
+          case 'outline':
+            if (attrs.color) span.dataset.outlineColor = attrs.color;
+            if (attrs.width) span.dataset.outlineWidth = String(attrs.width);
+            span.style.textShadow = '0 0 1px ' + (attrs.color || '#fff');
+            break;
+          case 'on':
+            if (attrs.click) span.dataset.onClick = attrs.click;
+            if (attrs.param) span.dataset.onParam = attrs.param;
+            span.style.outline = '1px dashed #6ee7b7';
+            span.style.outlineOffset = '2px';
+            break;
+        }
+
+        // 将处理后的内容放入新 span
+        while (tempDiv.firstChild) {
+          span.appendChild(tempDiv.firstChild);
+        }
+
+        // 插入新的 span
+        range.insertNode(span);
+
+        // 规范化选区到新 span 尾部
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        newRange.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+
+        updateBBCode();
+      }
+
+      function insertBr() {
+        saveState(); // 保存状态
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        const br = document.createElement('br');
+        br.setAttribute('data-br', '1');
+        range.insertNode(br);
+        // 在编辑区渲染一个可见的换行，占位
+        const space = document.createTextNode('\n');
+        range.setStartAfter(br);
+        range.insertNode(space);
+        range.setStartAfter(space);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        updateBBCode();
+      }
+
+      function insertImg(attrs) {
+        saveState(); // 保存状态
+        // 在编辑区以伪 span 显示（不会真正显示图片）
+        const span = document.createElement('span');
+        span.setAttribute('data-tag', 'img');
+        span.dataset.src = attrs.src || '';
+        if (attrs.width) span.dataset.width = String(attrs.width);
+        if (attrs.height) span.dataset.height = String(attrs.height);
+        if (attrs.align) span.dataset.align = attrs.align;
+        if (attrs.offset) span.dataset.offset = attrs.offset;
+        span.textContent = `<img src='${attrs.src || ''}'/>`;
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) {
+          document.getElementById('viz').appendChild(span);
+          updateBBCode();
+          return;
+        }
+        const range = sel.getRangeAt(0);
+        range.insertNode(span);
+        range.setStartAfter(span);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        updateBBCode();
+      }
+
+      // 将编辑区 DOM 转换为 Cocos RichText BBCode 字符串
+      function domToBBCode(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          // 基本文本：转义 & < >
+          return node.nodeValue.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+        const el = node;
+        if (el.matches('br[data-br]')) return '<br/>';
+
+        const children = Array.from(el.childNodes).map(domToBBCode).join('');
+
+        if (el.id === 'viz') return children; // 根容器
+
+        const tag = el.getAttribute('data-tag');
+        if (!tag) return children; // 普通 span/div
+
+        switch (tag) {
+          case 'b':
+            return `<b>${children}</b>`;
+          case 'i':
+            return `<i>${children}</i>`;
+          case 'u':
+            return `<u>${children}</u>`;
+          case 'color': {
+            const c = el.dataset.color || '#ffffff';
+            return `<color=${c}>${children}</color>`;
+          }
+          case 'size': {
+            const s = el.dataset.size || '20';
+            return `<size=${s}>${children}</size>`;
+          }
+          case 'outline': {
+            const c = el.dataset.outlineColor || '#ffffff';
+            const w = el.dataset.outlineWidth || '1';
+            return `<outline color=${c} width=${w}>${children}</outline>`;
+          }
+          case 'on': {
+            const clk = el.dataset.onClick || '';
+            const prm = el.dataset.onParam;
+            const attrs = [`click="${clk}"`];
+            if (prm && prm.length) attrs.push(`param="${prm}"`);
+            return `<on ${attrs.join(' ')}>${children}</on>`;
+          }
+          case 'img': {
+            const src = el.dataset.src || '';
+            const seg = [`src='${src}'`];
+            if (el.dataset.width) seg.push(`width=${el.dataset.width}`);
+            if (el.dataset.height) seg.push(`height=${el.dataset.height}`);
+            if (el.dataset.align) seg.push(`align=${el.dataset.align}`);
+            if (el.dataset.offset) seg.push(`offset=${el.dataset.offset}`);
+            return `<img ${seg.join(' ')} />`;
+          }
+          default:
+            return children;
+        }
+      }
+
+      function updateBBCode() {
+        const viz = document.getElementById('viz');
+        const code = domToBBCode(viz);
+        document.getElementById('bbcode').textContent = code;
+      }
+
+      // 事件绑定
+      function init() {
+        const viz = document.getElementById('viz');
+        viz.addEventListener('input', updateBBCode);
+        viz.addEventListener('keyup', updateBBCode);
+        viz.addEventListener('mouseup', () => {
+          saveSelection(); // 保存选区
+          updateBBCode();
+        });
+
+        // 阻止工具栏按钮的 mousedown 事件导致选区丢失，但保留输入框的正常行为
+        const toolbar = document.querySelector('.toolbar');
+        toolbar.addEventListener('mousedown', e => {
+          // 只对按钮和标签阻止默认行为，不影响输入框和下拉框
+          const target = e.target;
+          if (target.tagName === 'BUTTON' || target.tagName === 'LABEL') {
+            e.preventDefault();
+          }
+        });
+
+        // 基础按钮
+        document.querySelectorAll('button[data-action="wrap"]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const tag = btn.getAttribute('data-tag');
+            if (tag === 'color') {
+              const color = document.getElementById('inp-color').value;
+              wrapSelection('color', { color });
+            } else if (tag === 'size') {
+              const size = parseInt(document.getElementById('inp-size').value, 10) || 20;
+              wrapSelection('size', { size });
+            } else if (tag === 'outline') {
+              const color = document.getElementById('inp-outline-color').value;
+              const width = parseInt(document.getElementById('inp-outline-width').value, 10) || 1;
+              wrapSelection('outline', { color, width });
+            } else if (tag === 'on') {
+              const click = document.getElementById('inp-on-click').value.trim();
+              const param = document.getElementById('inp-on-param').value.trim();
+              if (!click) {
+                alert('请填写 click 处理函数名');
+                return;
+              }
+              wrapSelection('on', { click, param });
+            } else {
+              wrapSelection(tag);
+            }
+          });
+        });
+
+        document.getElementById('btn-br').addEventListener('click', insertBr);
+        document.getElementById('btn-img').addEventListener('click', () => {
+          const src = document.getElementById('inp-img-src').value.trim();
+          if (!src) {
+            alert('请填写 img 的 src（图集中的 SpriteFrame 名称）');
+            return;
+          }
+          const w = parseInt(document.getElementById('inp-img-w').value, 10);
+          const h = parseInt(document.getElementById('inp-img-h').value, 10);
+          const align = document.getElementById('inp-img-align').value;
+          const offset = document.getElementById('inp-img-offset').value.trim();
+          insertImg({
+            src,
+            width: isFinite(w) ? w : undefined,
+            height: isFinite(h) ? h : undefined,
+            align: align || undefined,
+            offset: offset || undefined,
+          });
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+          viz.innerHTML = '';
+          updateBBCode();
+        });
+        document.getElementById('btn-undo').addEventListener('click', undo);
+        document.getElementById('btn-copy').addEventListener('click', async () => {
+          const text = document.getElementById('bbcode').textContent;
+          try {
+            await navigator.clipboard.writeText(text);
+            alert('已复制到剪贴板');
+          } catch {
+            /* 退化处理 */
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('已复制');
+          }
+        });
+
+        // 初始示例
+        viz.innerHTML = `欢迎使用 <span data-tag="color" data-color="#22d3ee" style="color:#22d3ee;">RichText</span> 编辑器！ 选中文本后点左侧按钮。`;
+        updateBBCode();
+
+        // 全局快捷键：Ctrl+Z 撤销
+        document.addEventListener('keydown', e => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            undo();
+          }
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+    </script>
+  </body>
+</html>
